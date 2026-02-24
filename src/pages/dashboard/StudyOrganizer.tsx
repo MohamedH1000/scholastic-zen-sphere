@@ -39,6 +39,8 @@ import {
   SortAsc,
   BookMarked,
   Palette,
+  Target,
+  Tag,
 } from "lucide-react";
 
 const SUBJECT_COLORS = [
@@ -48,6 +50,8 @@ const SUBJECT_COLORS = [
   { name: 'Orange', value: 'hsl(25, 95%, 65%)' },
   { name: 'Green', value: 'hsl(152, 60%, 45%)' },
   { name: 'Red', value: 'hsl(0, 72%, 51%)' },
+  { name: 'Cyan', value: 'hsl(189, 94%, 45%)' },
+  { name: 'Yellow', value: 'hsl(48, 96%, 53%)' },
 ];
 
 const container = {
@@ -167,7 +171,7 @@ const StudyOrganizer = () => {
           user_id: user?.id,
           title: taskForm.title,
           description: taskForm.description,
-          subject_id: taskForm.subject_id || null,
+          subject_id: taskForm.subject_id && taskForm.subject_id !== '' ? taskForm.subject_id : null,
           due_date: taskForm.due_date || null,
           priority: taskForm.priority,
           status: taskForm.status,
@@ -191,7 +195,7 @@ const StudyOrganizer = () => {
         .update({
           title: taskForm.title,
           description: taskForm.description,
-          subject_id: taskForm.subject_id || null,
+          subject_id: taskForm.subject_id && taskForm.subject_id !== '' ? taskForm.subject_id : null,
           due_date: taskForm.due_date || null,
           priority: taskForm.priority,
           status: taskForm.status,
@@ -328,6 +332,15 @@ const StudyOrganizer = () => {
     }
   };
 
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case 'high': return '🔴';
+      case 'medium': return '🟡';
+      case 'low': return '🟢';
+      default: return '⚪';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed': return <CheckCircle2 className="h-5 w-5 text-success" />;
@@ -335,6 +348,15 @@ const StudyOrganizer = () => {
       case 'in_progress': return <Clock className="h-5 w-5 text-warning" />;
       default: return <Circle className="h-5 w-5 text-muted-foreground" />;
     }
+  };
+
+  const getDueDateColor = (dueDate: string) => {
+    if (!dueDate) return 'text-muted-foreground';
+    const daysUntil = Math.ceil((new Date(dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    if (daysUntil < 0) return 'text-destructive';
+    if (daysUntil <= 1) return 'text-warning';
+    if (daysUntil <= 3) return 'text-primary';
+    return 'text-muted-foreground';
   };
 
   const filteredTasksByStatus = {
@@ -363,7 +385,7 @@ const StudyOrganizer = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl font-bold text-foreground">Study Organizer</h2>
-          <p className="text-muted-foreground">Manage your tasks and subjects</p>
+          <p className="text-muted-foreground">Manage your tasks and stay organized</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -372,7 +394,8 @@ const StudyOrganizer = () => {
             className="gap-2"
           >
             <BookMarked className="h-4 w-4" />
-            Add Subject
+            <span className="hidden sm:inline">Add Subject</span>
+            <span className="sm:hidden">Subject</span>
           </Button>
           <Button
             onClick={() => {
@@ -383,7 +406,8 @@ const StudyOrganizer = () => {
             className="gap-2"
           >
             <Plus className="h-4 w-4" />
-            Add Task
+            <span className="hidden sm:inline">Add Task</span>
+            <span className="sm:hidden">Task</span>
           </Button>
         </div>
       </div>
@@ -395,20 +419,33 @@ const StudyOrganizer = () => {
           animate={{ opacity: 1, y: 0 }}
           className="glass-card p-4"
         >
-          <h3 className="font-semibold text-foreground mb-3">Your Subjects</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <Tag className="h-4 w-4" />
+              Your Subjects
+            </h3>
+            <span className="text-sm text-muted-foreground">{subjects.length} subjects</span>
+          </div>
           <div className="flex flex-wrap gap-2">
             {subjects.map((subject) => (
               <Badge
                 key={subject.id}
                 variant="outline"
-                className="px-3 py-1.5 text-sm cursor-pointer hover:bg-muted transition-colors"
+                className="px-3 py-1.5 text-sm cursor-pointer hover:bg-muted transition-colors group relative"
                 style={{
                   borderColor: subject.color,
                   color: subject.color,
                   backgroundColor: `${subject.color}10`,
                 }}
               >
+                <span className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: subject.color }} />
                 {subject.name}
+                <button
+                  onClick={() => handleDeleteSubject(subject.id)}
+                  className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+                >
+                  ×
+                </button>
               </Badge>
             ))}
           </div>
@@ -463,9 +500,20 @@ const StudyOrganizer = () => {
           <ScrollArea className="h-[calc(100vh-300px)]">
             <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 pr-4">
               {filteredTasksByStatus[filterStatus as keyof typeof filteredTasksByStatus]?.length === 0 ? (
-                <div className="text-center py-12">
-                  <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
-                  <p className="text-muted-foreground">No tasks found. Create your first task!</p>
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                    <Target className="h-10 w-10 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-2">No tasks found</h3>
+                  <p className="text-muted-foreground text-sm mb-4">Create your first task to get started!</p>
+                  <Button onClick={() => {
+                    resetTaskForm();
+                    setEditingTask(null);
+                    setTaskDialogOpen(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Task
+                  </Button>
                 </div>
               ) : (
                 filteredTasksByStatus[filterStatus as keyof typeof filteredTasksByStatus]?.map((task) => (
@@ -473,12 +521,14 @@ const StudyOrganizer = () => {
                     key={task.id}
                     variants={item}
                     whileHover={{ x: 4 }}
-                    className="glass-card p-4 group"
+                    className={`glass-card p-4 group transition-all ${
+                      task.status === 'completed' ? 'opacity-60' : ''
+                    } ${task.status === 'overdue' ? 'border-destructive/50' : ''}`}
                   >
                     <div className="flex items-start gap-4">
                       <button
                         onClick={() => handleToggleTaskStatus(task)}
-                        className="mt-1 flex-shrink-0"
+                        className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
                       >
                         {getStatusIcon(task.status)}
                       </button>
@@ -514,29 +564,31 @@ const StudyOrganizer = () => {
                           </p>
                         )}
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
                           {task.subjects && (
                             <Badge
                               variant="outline"
-                              className="text-xs"
+                              className="gap-1"
                               style={{
                                 borderColor: task.subjects.color,
                                 color: task.subjects.color,
                               }}
                             >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: task.subjects.color }} />
                               {task.subjects.name}
                             </Badge>
                           )}
 
                           <Badge
                             variant="outline"
-                            className={`text-xs ${getPriorityColor(task.priority)}`}
+                            className={`gap-1 ${getPriorityColor(task.priority)}`}
                           >
+                            <span>{getPriorityIcon(task.priority)}</span>
                             {task.priority}
                           </Badge>
 
                           {task.due_date && (
-                            <Badge variant="outline" className="text-xs gap-1">
+                            <Badge variant="outline" className={`gap-1 ${getDueDateColor(task.due_date)}`}>
                               <Calendar className="h-3 w-3" />
                               {new Date(task.due_date).toLocaleDateString()}
                             </Badge>
@@ -555,10 +607,12 @@ const StudyOrganizer = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {(['pending', 'in_progress', 'completed', 'overdue'] as const).map((status) => (
               <div key={status} className="glass-card p-4">
-                <h3 className="font-semibold text-foreground mb-3 capitalize flex items-center gap-2">
-                  {getStatusIcon(status)}
-                  {status.replace('_', ' ')}
-                  <Badge variant="secondary" className="ml-auto">
+                <h3 className="font-semibold text-foreground mb-3 capitalize flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon({ status })}
+                    <span className="text-sm">{status.replace('_', ' ')}</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
                     {filteredTasksByStatus[status]?.length || 0}
                   </Badge>
                 </h3>
@@ -568,21 +622,30 @@ const StudyOrganizer = () => {
                       <motion.div
                         key={task.id}
                         whileHover={{ scale: 1.02 }}
-                        className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:border-border/80 transition-colors"
                         onClick={() => openEditDialog(task)}
+                        className={`bg-card border-2 rounded-xl p-3 cursor-pointer transition-all hover:border-border/80 ${
+                          task.status === 'completed' ? 'opacity-60' : ''
+                        }`}
+                        style={task.status === 'overdue' ? { borderColor: 'hsl(var(--destructive) / 0.3)' } : {}}
                       >
                         <h4 className="font-medium text-foreground text-sm mb-2 line-clamp-2">
                           {task.title}
                         </h4>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {task.subjects && (
-                            <span style={{ color: task.subjects.color }}>
-                              {task.subjects.name}
-                            </span>
-                          )}
-                          {task.due_date && (
-                            <span>• {new Date(task.due_date).toLocaleDateString()}</span>
-                          )}
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            {task.subjects && (
+                              <span style={{ color: task.subjects.color }}>
+                                {task.subjects.name}
+                              </span>
+                            )}
+                            {task.due_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(task.due_date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <span>{getPriorityIcon(task.priority)}</span>
                         </div>
                       </motion.div>
                     ))}
@@ -663,9 +726,9 @@ const StudyOrganizer = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="low">🟢 Low</SelectItem>
+                    <SelectItem value="medium">🟡 Medium</SelectItem>
+                    <SelectItem value="high">🔴 High</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -736,16 +799,16 @@ const StudyOrganizer = () => {
 
             <div className="space-y-2">
               <Label>Color</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-3">
                 {SUBJECT_COLORS.map((color) => (
                   <button
                     key={color.value}
                     type="button"
                     onClick={() => setSubjectForm({ ...subjectForm, color: color.value })}
-                    className={`w-10 h-10 rounded-lg transition-all ${
+                    className={`w-12 h-12 rounded-xl transition-all ${
                       subjectForm.color === color.value
-                        ? 'ring-2 ring-foreground ring-offset-2 scale-110'
-                        : 'opacity-60 hover:opacity-100'
+                        ? 'ring-2 ring-foreground ring-offset-2 scale-110 shadow-lg'
+                        : 'opacity-60 hover:opacity-100 hover:scale-105'
                     }`}
                     style={{ backgroundColor: color.value }}
                     title={color.name}
